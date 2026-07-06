@@ -10,32 +10,42 @@ class Lead(BaseModel):
 
 
 class ResearchResult(BaseModel):
+    industry: str
+    estimated_size: str
+    potential_needs: list[str]
     summary: str
 
 
 class LeadAnalysis(BaseModel):
-    content: str
+    is_good_fit: bool
+    strengths: list[str]
+    concerns: list[str]
+    summary: str
 
 
 class LeadScore(BaseModel):
-    score: int
+    # Criterios explícitos — ya no dejamos que el modelo decida el criterio
+    budget_fit: int       # 1-10: probabilidad de tener presupuesto
+    company_size_fit: int # 1-10: tamano ideal para nuestro producto
+    industry_fit: int     # 1-10: industria alineada con nuestra solucion
+    urgency: int          # 1-10: necesidad urgente del producto
+    score: int            # 1-100: score final ponderado
+    reasoning: str        # por que ese score
 
 
 class Recommendation(BaseModel):
     route: Literal["high_value", "nurture", "disqualify"]
     next_action: str
+    reasoning: str
 
 
 class EmailDraft(BaseModel):
+    subject: str
     content: str
 
 
 class WorkflowState(BaseModel):
-    # El único campo requerido al inicio — el workflow empieza con un lead.
     lead: Lead
-
-    # Estos campos no son "opcionales" en sentido de negocio —
-    # todos se van a poblar. Son None solo porque aún no existen al inicio.
     research: ResearchResult | None = None
     analysis: LeadAnalysis | None = None
     lead_score: LeadScore | None = None
