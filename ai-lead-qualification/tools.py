@@ -113,8 +113,12 @@ def score_lead(state: WorkflowState) -> WorkflowState:
     return state
 
 
-def determine_next_action(state: WorkflowState) -> WorkflowState:
-    console.print("\n[bold blue]Paso 4 -- Determine Next Action[/bold blue]")
+def generate_recommendation(state: WorkflowState) -> WorkflowState:
+    """
+    El route ya esta decidido en state.route_taken (por routing.py).
+    Esta tool solo genera el texto de next_action y reasoning.
+    """
+    console.print("\n[bold blue]Paso 4 -- Generate Recommendation[/bold blue]")
 
     response = client.beta.chat.completions.parse(
         model="gpt-4o-mini",
@@ -123,8 +127,8 @@ def determine_next_action(state: WorkflowState) -> WorkflowState:
                 "role": "system",
                 "content": (
                     "Eres un estratega de ventas. "
-                    "Basandote en el score y el analisis, determina la siguiente accion. "
-                    "Usa 'high_value' si score >= 70, 'nurture' si score >= 40, 'disqualify' si score < 40."
+                    f"El route ya fue decidido: '{state.route_taken}'. "
+                    "Genera una recomendacion de siguiente accion coherente con ese route."
                 ),
             },
             {
@@ -132,7 +136,8 @@ def determine_next_action(state: WorkflowState) -> WorkflowState:
                 "content": (
                     f"Score: {state.lead_score.model_dump()}\n\n"
                     f"Analysis: {state.analysis.model_dump()}\n\n"
-                    "Cual es la siguiente accion?"
+                    f"Route asignado: {state.route_taken}\n\n"
+                    "Genera la recomendacion."
                 ),
             },
         ],
@@ -140,20 +145,12 @@ def determine_next_action(state: WorkflowState) -> WorkflowState:
     )
 
     state.recommendation = response.choices[0].message.parsed
-    console.print(f"  Route: [bold magenta]{state.recommendation.route}[/bold magenta]")
     console.print(f"  Accion: [magenta]{state.recommendation.next_action}[/magenta]")
     return state
 
 
-def generate_email(state: WorkflowState) -> WorkflowState:
-    console.print("\n[bold blue]Paso 5 -- Generate Email[/bold blue]")
-
-    if state.recommendation.route == "high_value":
-        tone = "directo, enfocado en ROI, con sentido de urgencia"
-    elif state.recommendation.route == "nurture":
-        tone = "educativo, de valor, sin presion de venta"
-    else:
-        tone = "agradecido pero claro en que no es el momento adecuado"
+def generate_sales_email(state: WorkflowState) -> WorkflowState:
+    console.print("\n[bold blue]Paso 5a -- Generate Sales Email (high_value)[/bold blue]")
 
     response = client.beta.chat.completions.parse(
         model="gpt-4o-mini",
@@ -161,18 +158,18 @@ def generate_email(state: WorkflowState) -> WorkflowState:
             {
                 "role": "system",
                 "content": (
-                    f"Eres un copywriter de ventas B2B. Escribe en espanol. "
-                    f"Tono: {tone}. Maximo 120 palabras en el contenido."
+                    "Eres un copywriter de ventas B2B. Escribe en espanol. "
+                    "Tono: directo, enfocado en ROI, con sentido de urgencia. "
+                    "Maximo 120 palabras en el contenido."
                 ),
             },
             {
                 "role": "user",
                 "content": (
-                    f"Escribe un email de outreach para:\n"
                     f"Nombre: {state.lead.contact_name}\n"
                     f"Empresa: {state.lead.company_name}\n"
                     f"Contexto: {state.research.summary}\n"
-                    f"Accion recomendada: {state.recommendation.next_action}"
+                    f"Accion: {state.recommendation.next_action}"
                 ),
             },
         ],
@@ -181,4 +178,49 @@ def generate_email(state: WorkflowState) -> WorkflowState:
 
     state.email_draft = response.choices[0].message.parsed
     console.print(f"  Asunto: [cyan]{state.email_draft.subject}[/cyan]")
+    return state
+
+
+def generate_nurture_email(state: WorkflowState) -> WorkflowState:
+    console.print("\n[bold blue]Paso 5b -- Generate Nurture Email (nurture)[/bold blue]")
+
+    response = client.beta.chat.completions.parse(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "Eres un copywriter de contenido B2B. Escribe en espanol. "
+                    "Tono: educativo, de valor, sin presion de venta. "
+                    "Maximo 120 palabras en el contenido."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Nombre: {state.lead.contact_name}\n"
+                    f"Empresa: {state.lead.company_name}\n"
+                    f"Contexto: {state.research.summary}\n"
+                    f"Necesidades identificadas: {state.research.potential_needs}"
+                ),
+            },
+        ],
+        response_format=EmailDraft,
+    )
+
+    state.email_draft = response.choices[0].message.parsed
+    console.print(f"  Asunto: [cyan]{state.email_draft.subject}[/cyan]")
+    return state
+
+
+def mark_disqualified(state: WorkflowState) -> WorkflowState:
+    console.print("\n[bold blue]Paso 5c -- Mark Disqualified[/bold blue]")
+
+    state.recommendation = Recommendation(
+        route="disqualify",
+        next_action="No continuar con este lead en este momento.",
+        reasoning=f"Score de {state.lead_score.score}/100 por debajo del umbral minimo de 40.",
+    )
+    state.workflow_status = "disqualified"
+    console.print(f"  [red]Lead descalificado. Score: {state.lead_score.score}/100[/red]")
     return state

@@ -24,13 +24,12 @@ class LeadAnalysis(BaseModel):
 
 
 class LeadScore(BaseModel):
-    # Criterios explícitos — ya no dejamos que el modelo decida el criterio
-    budget_fit: int       # 1-10: probabilidad de tener presupuesto
-    company_size_fit: int # 1-10: tamano ideal para nuestro producto
-    industry_fit: int     # 1-10: industria alineada con nuestra solucion
-    urgency: int          # 1-10: necesidad urgente del producto
-    score: int            # 1-100: score final ponderado
-    reasoning: str        # por que ese score
+    budget_fit: int
+    company_size_fit: int
+    industry_fit: int
+    urgency: int
+    score: int
+    reasoning: str
 
 
 class Recommendation(BaseModel):
@@ -51,3 +50,7 @@ class WorkflowState(BaseModel):
     lead_score: LeadScore | None = None
     recommendation: Recommendation | None = None
     email_draft: EmailDraft | None = None
+
+    # Gestionados por el orquestador, no por las tools
+    route_taken: str | None = None
+    workflow_status: Literal["running", "completed", "disqualified"] = "running"
