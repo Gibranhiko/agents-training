@@ -21,7 +21,7 @@ log = get_logger()
 
 
 def run_tool(fn: Callable, state: WorkflowState) -> WorkflowState:
-    tool_name = fn.__name__
+    tool_name = getattr(fn, '__name__', str(fn))
     start = time.perf_counter()
 
     log.info("tool.started", tool=tool_name, execution_id=state.execution_id)
