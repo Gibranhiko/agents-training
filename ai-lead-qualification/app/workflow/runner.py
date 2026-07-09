@@ -1,11 +1,12 @@
+import time
 from datetime import datetime, timezone
 from typing import Callable
 
-from models import Lead, LogEntry, WorkflowState
-from observability import get_logger
-from routing import route_by_score
-from storage import save_execution
-from tools import (
+from app.domain.models import Lead, LogEntry, WorkflowState
+from app.core.observability import get_logger
+from app.workflow.routing import route_by_score
+from app.storage.repository import save_execution
+from app.workflow.tools import (
     analyze_lead,
     generate_nurture_email,
     generate_recommendation,
@@ -14,8 +15,6 @@ from tools import (
     research_company,
     score_lead,
 )
-
-import time
 
 log = get_logger()
 
@@ -30,7 +29,6 @@ def run_tool(fn: Callable, state: WorkflowState) -> WorkflowState:
     try:
         result = fn(state)
         duration_ms = round((time.perf_counter() - start) * 1000, 2)
-
         log.info("tool.completed", tool=tool_name, duration_ms=duration_ms, execution_id=state.execution_id)
         result.execution_log.append(LogEntry(tool=tool_name, event="completed", duration_ms=duration_ms))
         result.tool_durations[tool_name] = duration_ms
@@ -39,13 +37,11 @@ def run_tool(fn: Callable, state: WorkflowState) -> WorkflowState:
     except Exception as e:
         duration_ms = round((time.perf_counter() - start) * 1000, 2)
         log.error("tool.failed", tool=tool_name, error=str(e), duration_ms=duration_ms, execution_id=state.execution_id)
-
         state.execution_log.append(LogEntry(tool=tool_name, event="failed", duration_ms=duration_ms, error=str(e)))
         state.workflow_status = "failed"
         state.failed_at_tool = tool_name
         state.error = str(e)
         state.completed_at = datetime.now(timezone.utc)
-
         save_execution(state)
         return state
 

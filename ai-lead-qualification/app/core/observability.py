@@ -8,7 +8,7 @@ def configure_logging() -> None:
             structlog.processors.TimeStamper(fmt="%H:%M:%S", utc=True),
             structlog.dev.ConsoleRenderer(colors=False),
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(20),  # INFO level
+        wrapper_class=structlog.make_filtering_bound_logger(20),
         context_class=dict,
         logger_factory=structlog.PrintLoggerFactory(),
     )

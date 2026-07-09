@@ -67,8 +67,6 @@ class WorkflowState(BaseModel):
 
     route_taken: str | None = None
     workflow_status: Literal["running", "completed", "disqualified", "failed"] = "running"
-
-    # Campos de falla — solo se pueblan si algo sale mal
     failed_at_tool: str | None = None
     error: str | None = None
 

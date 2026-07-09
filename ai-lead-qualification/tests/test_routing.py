@@ -1,9 +1,5 @@
-"""
-Routing es logica pura — no necesita mocks, no llama a OpenAI.
-Es el tipo de test mas facil de escribir y el mas rapido de correr.
-"""
 import pytest
-from routing import route_by_score
+from app.workflow.routing import route_by_score
 
 
 def test_high_value_at_boundary(state_after_score):
