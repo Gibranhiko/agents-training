@@ -11,6 +11,7 @@ from models import (
     ResearchResult,
     WorkflowState,
 )
+from retry import with_retry
 
 load_dotenv()
 
@@ -18,6 +19,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 console = Console()
 
 
+@with_retry(max_attempts=3, delay_seconds=1.0)
 def research_company(state: WorkflowState) -> WorkflowState:
     console.print("\n[bold blue]Paso 1 -- Research Company[/bold blue]")
 
@@ -46,6 +48,7 @@ def research_company(state: WorkflowState) -> WorkflowState:
     return state
 
 
+@with_retry(max_attempts=3, delay_seconds=1.0)
 def analyze_lead(state: WorkflowState) -> WorkflowState:
     console.print("\n[bold blue]Paso 2 -- Analyze Lead[/bold blue]")
 
@@ -78,6 +81,7 @@ def analyze_lead(state: WorkflowState) -> WorkflowState:
     return state
 
 
+@with_retry(max_attempts=3, delay_seconds=1.0)
 def score_lead(state: WorkflowState) -> WorkflowState:
     console.print("\n[bold blue]Paso 3 -- Score Lead[/bold blue]")
 
@@ -113,6 +117,7 @@ def score_lead(state: WorkflowState) -> WorkflowState:
     return state
 
 
+@with_retry(max_attempts=3, delay_seconds=1.0)
 def generate_recommendation(state: WorkflowState) -> WorkflowState:
     """
     El route ya esta decidido en state.route_taken (por routing.py).
@@ -149,6 +154,7 @@ def generate_recommendation(state: WorkflowState) -> WorkflowState:
     return state
 
 
+@with_retry(max_attempts=3, delay_seconds=1.0)
 def generate_sales_email(state: WorkflowState) -> WorkflowState:
     console.print("\n[bold blue]Paso 5a -- Generate Sales Email (high_value)[/bold blue]")
 
@@ -181,6 +187,7 @@ def generate_sales_email(state: WorkflowState) -> WorkflowState:
     return state
 
 
+@with_retry(max_attempts=3, delay_seconds=1.0)
 def generate_nurture_email(state: WorkflowState) -> WorkflowState:
     console.print("\n[bold blue]Paso 5b -- Generate Nurture Email (nurture)[/bold blue]")
 

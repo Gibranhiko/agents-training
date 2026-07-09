@@ -66,8 +66,11 @@ class WorkflowState(BaseModel):
     email_draft: EmailDraft | None = None
 
     route_taken: str | None = None
-    workflow_status: Literal["running", "completed", "disqualified"] = "running"
+    workflow_status: Literal["running", "completed", "disqualified", "failed"] = "running"
 
-    # Observabilidad — se pueblan automaticamente por el orquestador
+    # Campos de falla — solo se pueblan si algo sale mal
+    failed_at_tool: str | None = None
+    error: str | None = None
+
     execution_log: list[LogEntry] = Field(default_factory=list)
     tool_durations: dict[str, float] = Field(default_factory=dict)

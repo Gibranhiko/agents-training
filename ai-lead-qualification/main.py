@@ -29,8 +29,9 @@ console = Console()
 
 def run_tool(fn: Callable, state: WorkflowState) -> WorkflowState:
     """
-    Envuelve cualquier tool con logging y timing automatico.
-    Las tools no saben que estan siendo observadas — esa es la idea.
+    Envuelve cualquier tool con logging, timing, y manejo de fallas.
+    Si la tool falla (despues de sus reintentos), el state queda en
+    status='failed' y el workflow se detiene limpiamente.
     """
     tool_name = fn.__name__
     start = time.perf_counter()
@@ -51,8 +52,15 @@ def run_tool(fn: Callable, state: WorkflowState) -> WorkflowState:
     except Exception as e:
         duration_ms = round((time.perf_counter() - start) * 1000, 2)
         log.error("tool.failed", tool=tool_name, error=str(e), duration_ms=duration_ms, execution_id=state.execution_id)
+
         state.execution_log.append(LogEntry(tool=tool_name, event="failed", duration_ms=duration_ms, error=str(e)))
-        raise
+        state.workflow_status = "failed"
+        state.failed_at_tool = tool_name
+        state.error = str(e)
+        state.completed_at = datetime.now(timezone.utc)
+
+        save_execution(state)  # persistimos el estado parcial de la falla
+        return state
 
 
 def run_workflow(lead: Lead) -> WorkflowState:
@@ -60,8 +68,16 @@ def run_workflow(lead: Lead) -> WorkflowState:
     log.info("workflow.started", execution_id=state.execution_id, company=lead.company_name)
 
     state = run_tool(research_company, state)
+    if state.workflow_status == "failed":
+        return state
+
     state = run_tool(analyze_lead, state)
+    if state.workflow_status == "failed":
+        return state
+
     state = run_tool(score_lead, state)
+    if state.workflow_status == "failed":
+        return state
 
     route = route_by_score(state)
     state.route_taken = route
@@ -69,16 +85,19 @@ def run_workflow(lead: Lead) -> WorkflowState:
 
     if route == "high_value":
         state = run_tool(generate_recommendation, state)
-        state = run_tool(generate_sales_email, state)
-        state.workflow_status = "completed"
+        if state.workflow_status != "failed":
+            state = run_tool(generate_sales_email, state)
 
     elif route == "nurture":
         state = run_tool(generate_recommendation, state)
-        state = run_tool(generate_nurture_email, state)
-        state.workflow_status = "completed"
+        if state.workflow_status != "failed":
+            state = run_tool(generate_nurture_email, state)
 
     else:
         state = run_tool(mark_disqualified, state)
+
+    if state.workflow_status == "running":
+        state.workflow_status = "completed"
 
     state.completed_at = datetime.now(timezone.utc)
     total_ms = sum(state.tool_durations.values())
@@ -103,7 +122,20 @@ def main():
 
     state = run_workflow(lead)
 
-    if state.workflow_status == "disqualified":
+    if state.workflow_status == "failed":
+        console.print(
+            Panel(
+                f"[bold]Empresa:[/bold]      {state.lead.company_name}\n"
+                f"[bold]Fallo en tool:[/bold] {state.failed_at_tool}\n"
+                f"[bold]Error:[/bold]         {state.error}",
+                title="[bold red]Workflow Fallido[/bold red]",
+                border_style="red",
+                padding=(1, 2),
+            )
+        )
+        return
+
+    elif state.workflow_status == "disqualified":
         console.print(
             Panel(
                 f"[bold]Empresa:[/bold] {state.lead.company_name}\n"
