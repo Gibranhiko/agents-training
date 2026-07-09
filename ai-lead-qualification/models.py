@@ -45,8 +45,15 @@ class EmailDraft(BaseModel):
     content: str
 
 
+class LogEntry(BaseModel):
+    tool: str
+    event: Literal["started", "completed", "failed"]
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    duration_ms: float | None = None
+    error: str | None = None
+
+
 class WorkflowState(BaseModel):
-    # Identidad de la ejecucion — se genera al crear el state
     execution_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: datetime | None = None
@@ -60,3 +67,7 @@ class WorkflowState(BaseModel):
 
     route_taken: str | None = None
     workflow_status: Literal["running", "completed", "disqualified"] = "running"
+
+    # Observabilidad — se pueblan automaticamente por el orquestador
+    execution_log: list[LogEntry] = Field(default_factory=list)
+    tool_durations: dict[str, float] = Field(default_factory=dict)
