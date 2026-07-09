@@ -1,9 +1,12 @@
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.panel import Panel
+from rich.table import Table
 
 from models import Lead, WorkflowState
 from routing import route_by_score
+from storage import init_db, list_executions, save_execution
 from tools import (
     analyze_lead,
     generate_nurture_email,
@@ -22,17 +25,14 @@ console = Console()
 def run_workflow(lead: Lead) -> WorkflowState:
     state = WorkflowState(lead=lead)
 
-    # Pasos lineales — siempre corren
     state = research_company(state)
     state = analyze_lead(state)
     state = score_lead(state)
 
-    # Routing: logica determinista, sin LLM
     route = route_by_score(state)
     state.route_taken = route
-    console.print(f"\n[bold]Routing decision:[/bold] score={state.lead_score.score} -> [bold magenta]{route}[/bold magenta]")
+    console.print(f"\n[bold]Routing:[/bold] score={state.lead_score.score} -> [bold magenta]{route}[/bold magenta]")
 
-    # Branching: el orquestador decide que tools correr segun el route
     if route == "high_value":
         state = generate_recommendation(state)
         state = generate_sales_email(state)
@@ -43,13 +43,20 @@ def run_workflow(lead: Lead) -> WorkflowState:
         state = generate_nurture_email(state)
         state.workflow_status = "completed"
 
-    else:  # disqualify
+    else:
         state = mark_disqualified(state)
+
+    # Registramos cuando termino y persistimos
+    state.completed_at = datetime.now(timezone.utc)
+    save_execution(state)
+    console.print(f"\n[dim]Guardado: execution_id={state.execution_id}[/dim]")
 
     return state
 
 
 def main():
+    init_db()
+
     lead = Lead(
         company_name="Acme Manufacturing",
         website="https://acme.com",
@@ -65,10 +72,10 @@ def main():
     if state.workflow_status == "disqualified":
         console.print(
             Panel(
-                f"[bold]Empresa:[/bold]  {state.lead.company_name}\n"
-                f"[bold]Score:[/bold]    {state.lead_score.score} / 100\n"
-                f"[bold]Status:[/bold]   [red]{state.workflow_status}[/red]\n"
-                f"[bold]Razon:[/bold]    {state.recommendation.reasoning}",
+                f"[bold]Empresa:[/bold] {state.lead.company_name}\n"
+                f"[bold]Score:[/bold]   {state.lead_score.score} / 100\n"
+                f"[bold]Status:[/bold]  [red]{state.workflow_status}[/red]\n"
+                f"[bold]Razon:[/bold]   {state.recommendation.reasoning}",
                 title="[bold red]Lead Descalificado[/bold red]",
                 border_style="red",
                 padding=(1, 2),
@@ -89,6 +96,30 @@ def main():
                 padding=(1, 2),
             )
         )
+
+    # Muestra historial de ejecuciones
+    console.print("\n[bold]Historial de ejecuciones:[/bold]")
+    executions = list_executions()
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("ID", style="dim", width=36)
+    table.add_column("Empresa")
+    table.add_column("Score")
+    table.add_column("Route")
+    table.add_column("Status")
+    table.add_column("Creado")
+
+    for ex in executions:
+        table.add_row(
+            ex["execution_id"],
+            ex["company_name"],
+            str(ex["score"]) if ex["score"] else "-",
+            ex["route_taken"] or "-",
+            ex["status"],
+            ex["created_at"][:19],
+        )
+
+    console.print(table)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
+from datetime import datetime, timezone
 from typing import Literal
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+import uuid
 
 
 class Lead(BaseModel):
@@ -44,6 +46,11 @@ class EmailDraft(BaseModel):
 
 
 class WorkflowState(BaseModel):
+    # Identidad de la ejecucion — se genera al crear el state
+    execution_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    completed_at: datetime | None = None
+
     lead: Lead
     research: ResearchResult | None = None
     analysis: LeadAnalysis | None = None
@@ -51,6 +58,5 @@ class WorkflowState(BaseModel):
     recommendation: Recommendation | None = None
     email_draft: EmailDraft | None = None
 
-    # Gestionados por el orquestador, no por las tools
     route_taken: str | None = None
     workflow_status: Literal["running", "completed", "disqualified"] = "running"
